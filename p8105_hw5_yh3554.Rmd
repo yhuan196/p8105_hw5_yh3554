@@ -7,6 +7,7 @@ output: github_document
 library(tidyverse)
 library(p8105.datasets)
 library(viridis)
+library(dbplyr)
 knitr::opts_chunk$set(
 	echo = TRUE,
 	warning = FALSE,
@@ -27,14 +28,9 @@ theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
 
 
-```{r load_libraries}
-library(tidyverse)
-```
-
-
 ## Problem 1
 
-The code chunk below imports the data in individual spreadsheets contained in `data/`. To do this, I create a dataframe that includes the list of all files in that directory and the complete path to each file. As a next step, I `map` over paths and import data using the `read_csv` function. Finally, I `unnest` the result of `map`.
+First create a dataframe `full_df`that includes all data files from the directory `data/`and complete path to each file. Then use `map` over paths and read data using the `read_csv` function. 
 
 ```{r, message = FALSE, warning = FALSE}
 full_df = 
@@ -43,10 +39,10 @@ full_df =
     path = str_c("data/", files)
   ) %>% 
   mutate(data = map(path, read_csv)) %>% 
-  unnest()
+  unnest(cols = c(data))
 ```
 
-The result of the previous code chunk isn't tidy -- data are wide rather than long, and some important variables are included as parts of others. The code chunk below tides the data using string manipulations on the file, converting from wide to long, and selecting relevant variables. 
+To tidy data dataframe need to use string manipulations on the file, converting from wide to long, and selecting relevant variables. 
 
 ```{r}
 tidy_df = 
@@ -63,7 +59,7 @@ tidy_df =
   select(group, subj = files, week, outcome)
 ```
 
-Finally, the code chunk below creates a plot showing individual data, faceted by group. 
+Creates a plot showing individual data, faceted by group. 
 
 ```{r}
 tidy_df %>% 
@@ -73,6 +69,45 @@ tidy_df %>%
   facet_grid(~group)
 ```
 
-This plot suggests high within-subject correlation -- subjects who start above average end up above average, and those that start below average end up below average. Subjects in the control group generally don't change over time, but those in the experiment group increase their outcome in a roughly linear way. 
+Based on the spaghetti plots, the outcome of experiment group increase over time, but the control group not change much over time. The plots suggest high within-subject correlation -- subjects who start above average end up above average, and those that start below average end up below average.
 
+
+## Problem 2
+
+#### Read the data
+
+```{r}
+homicide_df = read_csv("data_homicide/homicide-data.csv", show_col_types = FALSE)
+```
+
+#### Table of proportion of missing data
+
+```{r}
+homicide_df %>% 
+  summarise_at(vars(lat:disposition), .funs = function(x) mean(is.na(x))) %>%
+  knitr::kable()
+```
+
+#### Describle the raw data
+
+The `homicide_df` is data contains homicides in 50 large U.S. It has `r nrow(homicide_df)` variables and `r ncol(homicide_df)` cases. The key variables are unique id, victim demographic information (first name, last name, age, sex), the location (city, state, latitude, longitude), and disposition. It has `r sum(is.na (homicide_df$lat))` missing latitude information and `r sum(is.na (homicide_df$lon))` missing longitude information.
+
+#### Generate new dataframe
+
+Create `city_state` variable by combining city and state variales. Then summarize within citries to obtain the total number of homicides and number of unsolved homicides (disposition is “Closed without arrest” or “Open/No arrest”).
+
+```{r}
+homicide_tidy <- homicide_df %>% 
+  mutate(
+    city_state = str_c(city, state, sep = ", ")) %>%
+  group_by(city_state) %>%
+  summarize(
+    homi_tot = n(),
+    homi_unsolved = sum(disposition == "Closed without arrest") 
+    + sum(disposition == "Open/No arrest" )
+  ) %>%
+  arrange(desc(homi_tot))
+
+head(homicide_tidy)
+```
 
